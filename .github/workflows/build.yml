@@ -17,13 +17,27 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      - name: Generate Project Files & Source Code
+      - name: Generate Project Files & Build APK
         run: |
+          # 1. 빈 폴더에서 Gradle Wrapper 먼저 생성
+          gradle wrapper --gradle-version 8.5
+          chmod +x gradlew
+
+          # 2. 소스 코드 폴더 생성
           mkdir -p app/src/main/java/com/example/animationscale
           mkdir -p app/src/main/res/xml
           mkdir -p app/src/main/res/values
 
-          cat << 'EOF' > settings.gradle
+          # 3. 파이썬으로 들여쓰기 오류 없이 파일 정확히 생성
+          python3 - << 'PYEOF'
+          import pathlib, textwrap
+
+          def write_file(path, content):
+              p = pathlib.Path(path)
+              p.parent.mkdir(parents=True, exist_ok=True)
+              p.write_text(textwrap.dedent(content).lstrip(), encoding="utf-8")
+
+          write_file("settings.gradle", """
           pluginManagement {
               repositories {
                   google()
@@ -40,23 +54,23 @@ jobs:
           }
           rootProject.name = "AnimationScale"
           include ':app'
-          EOF
+          """)
 
-          cat << 'EOF' > build.gradle
+          write_file("build.gradle", """
           plugins {
               id 'com.android.application' version '8.2.2' apply false
               id 'org.jetbrains.kotlin.android' version '1.9.22' apply false
           }
-          EOF
+          """)
 
-          cat << 'EOF' > gradle.properties
+          write_file("gradle.properties", """
           org.gradle.jvmargs=-Xmx2048m -Dfile.encoding=UTF-8
           android.useAndroidX=true
           kotlin.code.style=official
           android.nonTransitiveRClass=true
-          EOF
+          """)
 
-          cat << 'EOF' > app/build.gradle
+          write_file("app/build.gradle", """
           plugins {
               id 'com.android.application'
               id 'org.jetbrains.kotlin.android'
@@ -84,9 +98,9 @@ jobs:
               implementation 'androidx.appcompat:appcompat:1.6.1'
               implementation 'com.google.android.material:material:1.11.0'
           }
-          EOF
+          """)
 
-          cat << 'EOF' > app/src/main/res/xml/accessibility_service_config.xml
+          write_file("app/src/main/res/xml/accessibility_service_config.xml", """
           <?xml version="1.0" encoding="utf-8"?>
           <accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
               android:accessibilityFeedbackType="feedbackGeneric"
@@ -94,16 +108,16 @@ jobs:
               android:description="@string/accessibility_service_description"
               android:isAccessibilityTool="true"
               android:notificationTimeout="100" />
-          EOF
+          """)
 
-          cat << 'EOF' > app/src/main/res/values/strings.xml
+          write_file("app/src/main/res/values/strings.xml", """
           <resources>
               <string name="app_name">애니메이션 배율</string>
               <string name="accessibility_service_description">개발자 옵션 없이 시스템 애니메이션 배율(창, 화면 전환, Animator)을 변경하기 위해 사용됩니다.</string>
           </resources>
-          EOF
+          """)
 
-          cat << 'EOF' > app/src/main/AndroidManifest.xml
+          write_file("app/src/main/AndroidManifest.xml", """
           <?xml version="1.0" encoding="utf-8"?>
           <manifest xmlns:android="http://schemas.android.com/apk/res/android">
               <application
@@ -133,9 +147,9 @@ jobs:
                   </service>
               </application>
           </manifest>
-          EOF
+          """)
 
-          cat << 'EOF' > app/src/main/java/com/example/animationscale/AnimationAccessibilityService.kt
+          write_file("app/src/main/java/com/example/animationscale/AnimationAccessibilityService.kt", """
           package com.example.animationscale
 
           import android.accessibilityservice.AccessibilityService
@@ -173,9 +187,9 @@ jobs:
                   super.onDestroy()
               }
           }
-          EOF
+          """)
 
-          cat << 'EOF' > app/src/main/java/com/example/animationscale/MainActivity.kt
+          write_file("app/src/main/java/com/example/animationscale/MainActivity.kt", r"""
           package com.example.animationscale
 
           import android.app.AlertDialog
@@ -281,232 +295,3 @@ jobs:
                       setTextColor(Color.parseColor("#191F28"))
                   }
                   statusRow.addView(statusDot)
-                  statusRow.addView(statusTitle)
-                  serviceCard.addView(statusRow)
-                  serviceCard.addView(TextView(this).apply {
-                      text = "배율을 고른 뒤 적용해 주세요. 앱을 다시 열거나 서비스가 연결될 때 자동으로 바꾸지 않습니다."
-                      setTextColor(Color.parseColor("#6B7684"))
-                      textSize = 13f
-                      setPadding(0, dp(8), 0, dp(16))
-                  })
-                  val openSettingsBtn = Button(this).apply {
-                      text = "접근성 설정 열기"
-                      isAllCaps = false
-                      setTextColor(Color.parseColor("#2B59C3"))
-                      textSize = 15f
-                      setTypeface(typeface, Typeface.BOLD)
-                      background = cardBackground(Color.parseColor("#EEF3FF"), 14, Color.TRANSPARENT)
-                      stateListAnimator = null
-                      setOnClickListener { startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
-                  }
-                  serviceCard.addView(openSettingsBtn)
-                  root.addView(serviceCard, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(16) })
-
-                  val currentCard = LinearLayout(this).apply {
-                      orientation = LinearLayout.VERTICAL
-                      background = cardBackground()
-                      setPadding(dp(20), dp(20), dp(20), dp(20))
-                  }
-                  val currentHeader = LinearLayout(this).apply {
-                      orientation = LinearLayout.HORIZONTAL
-                      gravity = Gravity.CENTER_VERTICAL
-                  }
-                  currentHeader.addView(TextView(this).apply {
-                      text = "현재 시스템 배율"
-                      textSize = 17f
-                      setTypeface(typeface, Typeface.BOLD)
-                      setTextColor(Color.parseColor("#191F28"))
-                      layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
-                  })
-                  val refreshBtn = Button(this).apply {
-                      text = "새로고침"
-                      isAllCaps = false
-                      textSize = 13f
-                      setTextColor(Color.parseColor("#2B59C3"))
-                      background = cardBackground(Color.parseColor("#EEF3FF"), 12, Color.TRANSPARENT)
-                      stateListAnimator = null
-                      setOnClickListener { refreshState() }
-                  }
-                  currentHeader.addView(refreshBtn, LinearLayout.LayoutParams(dp(84), dp(38)))
-                  currentCard.addView(currentHeader)
-
-                  val scaleBoxesRow = LinearLayout(this).apply {
-                      orientation = LinearLayout.HORIZONTAL
-                      setPadding(0, dp(14), 0, dp(12))
-                  }
-                  windowScaleText = TextView(this)
-                  transitionScaleText = TextView(this)
-                  animatorScaleText = TextView(this)
-                  scaleBoxesRow.addView(createScaleBox("창", windowScaleText), boxLayoutParams(true))
-                  scaleBoxesRow.addView(createScaleBox("화면 전환", transitionScaleText), boxLayoutParams(true))
-                  scaleBoxesRow.addView(createScaleBox("Animator", animatorScaleText), boxLayoutParams(false))
-                  currentCard.addView(scaleBoxesRow)
-                  currentCard.addView(TextView(this).apply {
-                      text = "현재 설정된 값입니다. 앱마다 체감 효과는 다를 수 있어요."
-                      setTextColor(Color.parseColor("#8B95A1"))
-                      textSize = 12f
-                  })
-                  root.addView(currentCard, LinearLayout.LayoutParams(LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply { bottomMargin = dp(16) })
-
-                  val selectCard = LinearLayout(this).apply {
-                      orientation = LinearLayout.VERTICAL
-                      background = cardBackground()
-                      setPadding(dp(20), dp(20), dp(20), dp(20))
-                  }
-                  selectCard.addView(TextView(this).apply {
-                      text = "원하는 배율 선택"
-                      textSize = 17f
-                      setTypeface(typeface, Typeface.BOLD)
-                      setTextColor(Color.parseColor("#191F28"))
-                  })
-                  selectCard.addView(TextView(this).apply {
-                      text = "낮은 값은 빠르게, 높은 값은 느리게.\n창·화면 전환·Animator에 함께 적용됩니다."
-                      setTextColor(Color.parseColor("#6B7684"))
-                      textSize = 13f
-                      setPadding(0, dp(6), 0, dp(16))
-                  })
-                  val grid = GridLayout(this).apply { columnCount = 4; rowCount = 2 }
-                  presets.forEach { (scale, label) ->
-                      val btn = Button(this).apply {
-                          text = label
-                          isAllCaps = false
-                          textSize = 13f
-                          stateListAnimator = null
-                          setOnClickListener { applyScale(scale) }
-                      }
-                      presetButtons[scale] = btn
-                      grid.addView(btn, gridItemParams())
-                  }
-                  customButton = Button(this).apply {
-                      text = "직접\n입력"
-                      isAllCaps = false
-                      textSize = 13f
-                      stateListAnimator = null
-                      setOnClickListener { showCustomScaleDialog() }
-                  }
-                  grid.addView(customButton, gridItemParams())
-                  selectCard.addView(grid)
-                  root.addView(selectCard)
-                  scrollView.addView(root)
-                  return scrollView
-              }
-
-              private fun boxLayoutParams(addRightMargin: Boolean): LinearLayout.LayoutParams =
-                  LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
-                      if (addRightMargin) rightMargin = dp(8)
-                  }
-
-              private fun gridItemParams(): GridLayout.LayoutParams =
-                  GridLayout.LayoutParams().apply {
-                      width = 0
-                      height = dp(64)
-                      columnSpec = GridLayout.spec(GridLayout.UNDEFINED, 1f)
-                      setMargins(dp(4), dp(4), dp(4), dp(4))
-                  }
-
-              private fun createScaleBox(title: String, valueView: TextView): LinearLayout =
-                  LinearLayout(this).apply {
-                      orientation = LinearLayout.VERTICAL
-                      background = cardBackground(Color.parseColor("#F3F5F7"), 14, Color.TRANSPARENT)
-                      setPadding(dp(12), dp(12), dp(12), dp(14))
-                      addView(TextView(context).apply {
-                          text = title
-                          textSize = 12f
-                          setTextColor(Color.parseColor("#6B7684"))
-                      })
-                      valueView.apply {
-                          text = "1×"
-                          textSize = 20f
-                          setTypeface(typeface, Typeface.BOLD)
-                          setTextColor(Color.parseColor("#191F28"))
-                          gravity = Gravity.CENTER
-                          setPadding(0, dp(8), 0, 0)
-                      }
-                      addView(valueView)
-                  }
-
-              private fun applyScale(scale: Float) {
-                  if (!AnimationAccessibilityService.isConnected()) {
-                      Toast.makeText(this, "먼저 [접근성 설정 열기]에서 서비스를 켜주세요.", Toast.LENGTH_SHORT).show()
-                      return
-                  }
-                  if (AnimationAccessibilityService.applyAnimationScale(scale)) {
-                      Handler(Looper.getMainLooper()).postDelayed({ refreshState() }, 150)
-                  } else {
-                      Toast.makeText(this, "배율 변경 실패", Toast.LENGTH_SHORT).show()
-                  }
-              }
-
-              private fun showCustomScaleDialog() {
-                  val input = EditText(this).apply {
-                      hint = "예: 0.15 (0.0 ~ 10.0)"
-                      inputType = InputType.TYPE_CLASS_NUMBER or InputType.TYPE_NUMBER_FLAG_DECIMAL
-                      setPadding(dp(20), dp(16), dp(20), dp(16))
-                  }
-                  AlertDialog.Builder(this)
-                      .setTitle("배율 직접 입력")
-                      .setView(input)
-                      .setPositiveButton("적용") { _, _ ->
-                          val value = input.text.toString().toFloatOrNull()
-                          if (value != null && value in 0f..10f) applyScale(value)
-                          else Toast.makeText(this, "0 이상 10 이하의 숫자를 입력해 주세요.", Toast.LENGTH_SHORT).show()
-                      }
-                      .setNegativeButton("취소", null)
-                      .show()
-              }
-
-              private fun refreshState() {
-                  val connected = AnimationAccessibilityService.isConnected()
-                  statusDot.setTextColor(if (connected) Color.parseColor("#2E7D32") else Color.parseColor("#D32F2F"))
-                  statusTitle.text = if (connected) "접근성 서비스 연결됨" else "접근성 서비스 꺼짐"
-
-                  val win = getScale(Settings.Global.WINDOW_ANIMATION_SCALE)
-                  val trans = getScale(Settings.Global.TRANSITION_ANIMATION_SCALE)
-                  val anim = getScale(Settings.Global.ANIMATOR_DURATION_SCALE)
-
-                  windowScaleText.text = formatScale(win)
-                  transitionScaleText.text = formatScale(trans)
-                  animatorScaleText.text = formatScale(anim)
-
-                  var matchedPreset = false
-                  presetButtons.forEach { (presetScale, btn) ->
-                      val isSelected = abs(win - presetScale) < 0.001f && abs(trans - presetScale) < 0.001f && abs(anim - presetScale) < 0.001f
-                      if (isSelected) matchedPreset = true
-                      styleSelectButton(btn, isSelected)
-                  }
-                  styleSelectButton(customButton, !matchedPreset)
-              }
-
-              private fun styleSelectButton(button: Button, selected: Boolean) {
-                  if (selected) {
-                      button.background = cardBackground(Color.parseColor("#2B62F6"), 14, Color.TRANSPARENT)
-                      button.setTextColor(Color.WHITE)
-                      button.setTypeface(null, Typeface.BOLD)
-                  } else {
-                      button.background = cardBackground(Color.parseColor("#F3F5F7"), 14, Color.TRANSPARENT)
-                      button.setTextColor(Color.parseColor("#191F28"))
-                      button.setTypeface(null, Typeface.NORMAL)
-                  }
-              }
-
-              private fun getScale(key: String): Float =
-                  try { Settings.Global.getFloat(contentResolver, key, 1.0f) } catch (e: Exception) { 1.0f }
-
-              private fun formatScale(value: Float): String {
-                  val formatted = if (value % 1.0f == 0f) value.toInt().toString()
-                  else value.toBigDecimal().stripTrailingZeros().toPlainString()
-                  return "${formatted}×"
-              }
-          }
-          EOF
-
-      - name: Build Debug APK
-        run: |
-          gradle wrapper --gradle-version 8.5
-          ./gradlew assembleDebug
-
-      - name: Upload APK Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: AnimationScale-APK
-          path: app/build/outputs/apk/debug/app-debug.apk
